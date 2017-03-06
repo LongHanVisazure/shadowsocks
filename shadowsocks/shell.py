@@ -28,7 +28,7 @@ import traceback
 from functools import wraps
 
 from shadowsocks.common import to_bytes, to_str, IPNetwork
-from shadowsocks import encrypt
+from shadowsocks import cryptor
 
 
 VERBOSE_LEVEL = 5
@@ -132,6 +132,13 @@ def check_config(config, is_local):
             sys.exit(2)
         else:
             config['server'] = to_str(config['server'])
+
+        if config.get('tunnel_remote', None) is None:
+            logging.error('tunnel_remote addr not specified')
+            print_local_help()
+            sys.exit(2)
+        else:
+            config['tunnel_remote'] = to_str(config['tunnel_remote'])
     else:
         config['server'] = to_str(config.get('server', '0.0.0.0'))
         try:
@@ -159,6 +166,12 @@ def check_config(config, is_local):
     if 'server_port' in config and type(config['server_port']) != list:
         config['server_port'] = int(config['server_port'])
 
+    if 'tunnel_remote_port' in config:
+        config['tunnel_remote_port'] = \
+            int(config['tunnel_remote_port'])
+    if 'tunnel_port' in config:
+        config['tunnel_port'] = int(config['tunnel_port'])
+
     if config.get('local_address', '') in [b'0.0.0.0']:
         logging.warn('warning: local set to listen on 0.0.0.0, it\'s not safe')
     if config.get('server', '') in ['127.0.0.1', 'localhost']:
@@ -184,8 +197,10 @@ def check_config(config, is_local):
         if os.name != 'posix':
             logging.error('user can be used only on Unix')
             sys.exit(1)
+    if config.get('dns_server', None) is not None:
+        logging.info('Specified DNS server: %s' % config['dns_server'])
 
-    encrypt.try_cipher(config['password'], config['method'])
+    cryptor.try_cipher(config['password'], config['method'])
 
 
 def get_config(is_local):
@@ -298,6 +313,12 @@ def get_config(is_local):
     config['prefer_ipv6'] = config.get('prefer_ipv6', False)
     config['server_port'] = config.get('server_port', 8388)
 
+    config['tunnel_remote'] = \
+        to_str(config.get('tunnel_remote', '8.8.8.8'))
+    config['tunnel_remote_port'] = config.get('tunnel_remote_port', 53)
+    config['tunnel_port'] = config.get('tunnel_port', 53)
+    config['dns_server'] = config.get('dns_server', None)
+
     logging.getLogger('').handlers = []
     logging.addLevelName(VERBOSE_LEVEL, 'VERBOSE')
     if config['verbose'] >= 2:
@@ -341,6 +362,18 @@ Proxy options:
   -l LOCAL_PORT          local port, default: 1080
   -k PASSWORD            password
   -m METHOD              encryption method, default: aes-256-cfb
+                         supported method:
+                             chacha20-poly1305, chacha20-ietf-poly1305,
+                             *xchacha20-ietf-poly1305,
+                             aes-128-gcm, aes-192-gcm, aes-256-gcm,
+                             aes-128-cfb, aes-192-cfb, aes-256-cfb,
+                             es-128-ctr, aes-192-ctr, aes-256-ctr,
+                             camellia-128-cfb, camellia-192-cfb,
+                             camellia-256-cfb,
+                             salsa20, chacha20, chacha20-ietf,
+                             bf-cfb, cast5-cfb, des-cfb, idea-cfb,
+                             rc2-cfb, seed-cfb,
+                             rc4, rc4-md5, table.
   -t TIMEOUT             timeout in seconds, default: 300
   -a ONE_TIME_AUTH       one time auth
   --fast-open            use TCP_FASTOPEN, requires Linux 3.7+
@@ -371,6 +404,18 @@ Proxy options:
   -p SERVER_PORT         server port, default: 8388
   -k PASSWORD            password
   -m METHOD              encryption method, default: aes-256-cfb
+                         supported method:
+                             chacha20-poly1305, chacha20-ietf-poly1305,
+                             *xchacha20-ietf-poly1305,
+                             aes-128-gcm, aes-192-gcm, aes-256-gcm,
+                             aes-128-cfb, aes-192-cfb, aes-256-cfb,
+                             es-128-ctr, aes-192-ctr, aes-256-ctr,
+                             camellia-128-cfb, camellia-192-cfb,
+                             camellia-256-cfb,
+                             salsa20, chacha20, chacha20-ietf,
+                             bf-cfb, cast5-cfb, des-cfb, idea-cfb,
+                             rc2-cfb, seed-cfb,
+                             rc4, rc4-md5, table.
   -t TIMEOUT             timeout in seconds, default: 300
   -a ONE_TIME_AUTH       one time auth
   --fast-open            use TCP_FASTOPEN, requires Linux 3.7+
